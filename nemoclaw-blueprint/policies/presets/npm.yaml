@@ -9,7 +9,17 @@ network_policies:
   npm_yarn:
     name: npm_yarn
     endpoints:
-      - { host: registry.npmjs.org, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: registry.yarnpkg.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-    rules:
-      - allow: { method: GET, path: "/**" }
+      - host: registry.npmjs.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+      - host: registry.yarnpkg.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }

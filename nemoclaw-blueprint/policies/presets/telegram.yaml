@@ -9,7 +9,11 @@ network_policies:
   telegram_bot:
     name: telegram_bot
     endpoints:
-      - { host: api.telegram.org, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-    rules:
-      - allow: { method: GET, path: "/bot*/**" }
-      - allow: { method: POST, path: "/bot*/**" }
+      - host: api.telegram.org
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/bot*/**" }
+          - allow: { method: POST, path: "/bot*/**" }

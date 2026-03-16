@@ -47,6 +47,28 @@ function getPresetEndpoints(content) {
   return hosts;
 }
 
+/**
+ * Extract just the network_policies entries (indented content under
+ * the `network_policies:` key) from a preset file, stripping the
+ * `preset:` metadata header.
+ */
+function extractPresetEntries(presetContent) {
+  const npMatch = presetContent.match(/^network_policies:\n([\s\S]*)$/m);
+  if (!npMatch) return null;
+  return npMatch[1].trimEnd();
+}
+
+/**
+ * Parse the output of `openshell policy get --full` which has a metadata
+ * header (Version, Hash, etc.) followed by `---` and then the actual YAML.
+ */
+function parseCurrentPolicy(raw) {
+  if (!raw) return "";
+  const sep = raw.indexOf("---");
+  if (sep === -1) return raw;
+  return raw.slice(sep + 3).trim();
+}
+
 function applyPreset(sandboxName, presetName) {
   const presetContent = loadPreset(presetName);
   if (!presetContent) {
@@ -54,38 +76,65 @@ function applyPreset(sandboxName, presetName) {
     return false;
   }
 
-  // Get current policy
-  let currentPolicy = "";
+  const presetEntries = extractPresetEntries(presetContent);
+  if (!presetEntries) {
+    console.error(`  Preset ${presetName} has no network_policies section.`);
+    return false;
+  }
+
+  // Get current policy YAML from sandbox
+  let rawPolicy = "";
   try {
-    currentPolicy = runCapture(
-      `openshell policy get --sandbox ${sandboxName} 2>/dev/null`,
+    rawPolicy = runCapture(
+      `openshell policy get --full ${sandboxName} 2>/dev/null`,
       { ignoreError: true }
     );
   } catch {}
 
-  // Extract network_policies section from preset (skip the preset: header)
-  const npMatch = presetContent.match(/^network_policies:[\s\S]*$/m);
-  if (!npMatch) {
-    console.error(`  Preset ${presetName} has no network_policies section.`);
-    return false;
-  }
-  const presetNetworkPolicies = npMatch[0];
+  const currentPolicy = parseCurrentPolicy(rawPolicy);
 
-  // Merge: append preset network_policies into current policy
+  // Merge: inject preset entries under the existing network_policies key
   let merged;
   if (currentPolicy && currentPolicy.includes("network_policies:")) {
-    // Insert the preset's policies under the existing network_policies block
-    const presetEntries = presetNetworkPolicies
-      .replace(/^network_policies:\s*\n/, "")
-      .trim();
-    merged = currentPolicy.replace(
-      /^(network_policies:.*$)/m,
-      `$1\n${presetEntries}`
-    );
+    // Find the network_policies: line and append the new entries after it
+    // We need to insert before the next top-level key or end of file
+    const lines = currentPolicy.split("\n");
+    const result = [];
+    let inNetworkPolicies = false;
+    let inserted = false;
+
+    for (const line of lines) {
+      // Detect top-level keys (no leading whitespace, ends with colon)
+      const isTopLevel = /^\S.*:/.test(line);
+
+      if (line.trim() === "network_policies:" || line.trim().startsWith("network_policies:")) {
+        inNetworkPolicies = true;
+        result.push(line);
+        continue;
+      }
+
+      if (inNetworkPolicies && isTopLevel && !inserted) {
+        // We hit the next top-level key — insert preset entries before it
+        result.push(presetEntries);
+        inserted = true;
+        inNetworkPolicies = false;
+      }
+
+      result.push(line);
+    }
+
+    // If network_policies was the last section, append at end
+    if (inNetworkPolicies && !inserted) {
+      result.push(presetEntries);
+    }
+
+    merged = result.join("\n");
   } else if (currentPolicy) {
-    merged = currentPolicy + "\n" + presetNetworkPolicies;
+    // No network_policies section yet — append one
+    merged = currentPolicy + "\n\nnetwork_policies:\n" + presetEntries;
   } else {
-    merged = presetNetworkPolicies;
+    // No current policy at all — shouldn't happen, but handle it
+    merged = "network_policies:\n" + presetEntries;
   }
 
   // Write temp file and apply
@@ -93,7 +142,7 @@ function applyPreset(sandboxName, presetName) {
   fs.writeFileSync(tmpFile, merged, "utf-8");
 
   try {
-    run(`openshell policy set --sandbox ${sandboxName} --policy "${tmpFile}" --wait`);
+    run(`openshell policy set --policy "${tmpFile}" --wait ${sandboxName}`);
     console.log(`  Applied preset: ${presetName}`);
   } finally {
     fs.unlinkSync(tmpFile);
@@ -102,11 +151,11 @@ function applyPreset(sandboxName, presetName) {
   // Update registry
   const sandbox = registry.getSandbox(sandboxName);
   if (sandbox) {
-    const policies = sandbox.policies || [];
-    if (!policies.includes(presetName)) {
-      policies.push(presetName);
+    const pols = sandbox.policies || [];
+    if (!pols.includes(presetName)) {
+      pols.push(presetName);
     }
-    registry.updateSandbox(sandboxName, { policies });
+    registry.updateSandbox(sandboxName, { policies: pols });
   }
 
   return true;

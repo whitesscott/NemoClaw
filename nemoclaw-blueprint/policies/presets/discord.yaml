@@ -9,9 +9,26 @@ network_policies:
   discord:
     name: discord
     endpoints:
-      - { host: discord.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: gateway.discord.gg, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: cdn.discordapp.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-    rules:
-      - allow: { method: GET, path: "/**" }
-      - allow: { method: POST, path: "/**" }
+      - host: discord.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
+      - host: gateway.discord.gg
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
+      - host: cdn.discordapp.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }

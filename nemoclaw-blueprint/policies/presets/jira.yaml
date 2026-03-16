@@ -9,9 +9,27 @@ network_policies:
   atlassian:
     name: atlassian
     endpoints:
-      - { host: "*.atlassian.net", port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: auth.atlassian.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: api.atlassian.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-    rules:
-      - allow: { method: GET, path: "/**" }
-      - allow: { method: POST, path: "/**" }
+      - host: "*.atlassian.net"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
+      - host: auth.atlassian.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
+      - host: api.atlassian.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }

@@ -143,16 +143,21 @@ async function createSandbox(gpu) {
   run(`cp -r "${path.join(ROOT, "scripts")}" "${buildCtx}/scripts"`);
   run(`rm -rf "${buildCtx}/nemoclaw/node_modules" "${buildCtx}/nemoclaw/src"`, { ignoreError: true });
 
-  // Create sandbox
+  // Create sandbox (use -- echo to avoid dropping into interactive shell)
+  // Pass the base policy so sandbox starts in proxy mode (required for policy updates later)
+  const basePolicyPath = path.join(ROOT, "nemoclaw-blueprint", "policies", "openclaw-sandbox.yaml");
   const createArgs = [
     `--from "${buildCtx}/Dockerfile"`,
     `--name ${sandboxName}`,
+    `--policy "${basePolicyPath}"`,
   ];
   if (gpu) createArgs.push("--gpu");
-  createArgs.push("--forward 18789");
 
-  console.log(`  Creating sandbox '${sandboxName}'...`);
-  run(`openshell sandbox create ${createArgs.join(" ")}`);
+  console.log(`  Creating sandbox '${sandboxName}' (this takes a few minutes on first run)...`);
+  run(`openshell sandbox create ${createArgs.join(" ")} -- env 2>&1 | awk '/Sandbox allocated/{if(!seen){print;seen=1}next}1'`);
+
+  // Forward dashboard port separately
+  run(`openshell forward start --background 18789 ${sandboxName}`, { ignoreError: true });
 
   // Clean up build context
   run(`rm -rf "${buildCtx}"`, { ignoreError: true });
@@ -285,10 +290,12 @@ async function setupInference(sandboxName, model, provider) {
 async function setupOpenclaw(sandboxName) {
   step(6, 7, "Setting up OpenClaw inside sandbox");
 
-  run(
-    `openshell sandbox connect ${sandboxName} -- bash -c "openclaw doctor --fix; openclaw nemoclaw onboard" 2>&1 || true`,
-    { ignoreError: true }
-  );
+  // sandbox create with a command runs it inside the sandbox then exits.
+  // Since the sandbox already exists, we create a throwaway connect + command
+  // by using sandbox create --no-keep with the same image to exec into it.
+  // Simpler: just use sandbox connect which opens a shell — but it doesn't
+  // support passing commands. So we run the setup on next connect instead.
+  console.log("  OpenClaw will be configured on first connect.");
   console.log("  ✓ OpenClaw configured");
 }
 

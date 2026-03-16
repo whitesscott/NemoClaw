@@ -9,10 +9,35 @@ network_policies:
   outlook_graph:
     name: outlook_graph
     endpoints:
-      - { host: graph.microsoft.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: login.microsoftonline.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: outlook.office365.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-      - { host: outlook.office.com, port: 443, protocol: rest, enforcement: enforce, tls: terminate }
-    rules:
-      - allow: { method: GET, path: "/**" }
-      - allow: { method: POST, path: "/**" }
+      - host: graph.microsoft.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
+      - host: login.microsoftonline.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
+      - host: outlook.office365.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
+      - host: outlook.office.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/**" }
+          - allow: { method: POST, path: "/**" }
