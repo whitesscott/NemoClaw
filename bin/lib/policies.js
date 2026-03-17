@@ -69,6 +69,20 @@ function parseCurrentPolicy(raw) {
   return raw.slice(sep + 3).trim();
 }
 
+/**
+ * Build the openshell policy set command with properly quoted arguments.
+ */
+function buildPolicySetCommand(policyFile, sandboxName) {
+  return `openshell policy set --policy "${policyFile}" --wait "${sandboxName}"`;
+}
+
+/**
+ * Build the openshell policy get command with properly quoted arguments.
+ */
+function buildPolicyGetCommand(sandboxName) {
+  return `openshell policy get --full "${sandboxName}" 2>/dev/null`;
+}
+
 function applyPreset(sandboxName, presetName) {
   const presetContent = loadPreset(presetName);
   if (!presetContent) {
@@ -86,7 +100,7 @@ function applyPreset(sandboxName, presetName) {
   let rawPolicy = "";
   try {
     rawPolicy = runCapture(
-      `openshell policy get --full "${sandboxName}" 2>/dev/null`,
+      buildPolicyGetCommand(sandboxName),
       { ignoreError: true }
     );
   } catch {}
@@ -146,7 +160,8 @@ function applyPreset(sandboxName, presetName) {
   fs.writeFileSync(tmpFile, merged, "utf-8");
 
   try {
-    run(`openshell policy set --policy "${tmpFile}" --wait "${sandboxName}"`);
+    run(buildPolicySetCommand(tmpFile, sandboxName));
+
     console.log(`  Applied preset: ${presetName}`);
   } finally {
     fs.unlinkSync(tmpFile);
@@ -175,6 +190,10 @@ module.exports = {
   listPresets,
   loadPreset,
   getPresetEndpoints,
+  extractPresetEntries,
+  parseCurrentPolicy,
+  buildPolicySetCommand,
+  buildPolicyGetCommand,
   applyPreset,
   getAppliedPresets,
 };
