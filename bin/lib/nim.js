@@ -205,16 +205,6 @@ function pullNimImage(model) {
   return image;
 }
 
-function isJetsonPlatform() {
-  try {
-    const out = runCapture("test -f /etc/nv_tegra_release && echo yes", {
-      ignoreError: true,
-    });
-    return !!out && out.trim() === "yes";
-  } catch {}
-  return false;
-}
-
 function startNimContainer(sandboxName, model, port = 8000) {
   const name = containerName(sandboxName);
   const image = getImageForModel(model);
