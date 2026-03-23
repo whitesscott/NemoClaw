@@ -27,9 +27,9 @@ NEMOCLAW_VERSION="$(resolve_installer_version)"
 # ---------------------------------------------------------------------------
 if [[ -z "${NO_COLOR:-}" && -t 1 ]]; then
   if [[ "${COLORTERM:-}" == "truecolor" || "${COLORTERM:-}" == "24bit" ]]; then
-    C_GREEN=$'\033[38;2;118;185;0m'   # #76B900 — exact NVIDIA green
+    C_GREEN=$'\033[38;2;118;185;0m' # #76B900 — exact NVIDIA green
   else
-    C_GREEN=$'\033[38;5;148m'          # closest 256-color on dark backgrounds
+    C_GREEN=$'\033[38;5;148m' # closest 256-color on dark backgrounds
   fi
   C_BOLD=$'\033[1m'
   C_DIM=$'\033[2m'
@@ -44,10 +44,13 @@ fi
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-info()  { printf "${C_CYAN}[INFO]${C_RESET}  %s\n" "$*"; }
-warn()  { printf "${C_YELLOW}[WARN]${C_RESET}  %s\n" "$*"; }
-error() { printf "${C_RED}[ERROR]${C_RESET} %s\n" "$*" >&2; exit 1; }
-ok()    { printf "  ${C_GREEN}✓${C_RESET}  %s\n" "$*"; }
+info() { printf "${C_CYAN}[INFO]${C_RESET}  %s\n" "$*"; }
+warn() { printf "${C_YELLOW}[WARN]${C_RESET}  %s\n" "$*"; }
+error() {
+  printf "${C_RED}[ERROR]${C_RESET} %s\n" "$*" >&2
+  exit 1
+}
+ok() { printf "  ${C_GREEN}✓${C_RESET}  %s\n" "$*"; }
 
 resolve_default_sandbox_name() {
   local registry_file="${HOME}/.nemoclaw/sandboxes.json"
@@ -95,7 +98,7 @@ print_banner() {
 }
 
 print_done() {
-  local elapsed=$(( SECONDS - _INSTALL_START ))
+  local elapsed=$((SECONDS - _INSTALL_START))
   local sandbox_name
   sandbox_name="$(resolve_default_sandbox_name)"
   info "=== Installation complete ==="
@@ -146,7 +149,8 @@ usage() {
 #   Stdout/stderr are captured; dumped only on failure.
 #   Falls back to plain output when stdout is not a TTY (CI / piped installs).
 spin() {
-  local msg="$1"; shift
+  local msg="$1"
+  shift
 
   if [[ ! -t 1 ]]; then
     info "$msg"
@@ -154,7 +158,8 @@ spin() {
     return
   fi
 
-  local log; log=$(mktemp)
+  local log
+  log=$(mktemp)
   "$@" >"$log" 2>&1 &
   local pid=$! i=0
   local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
@@ -191,12 +196,13 @@ ORIGINAL_PATH="${PATH:-}"
 
 # Compare two semver strings (major.minor.patch). Returns 0 if $1 >= $2.
 version_gte() {
-  local IFS=.
-  local -a a=($1) b=($2)
+  local -a a b
+  IFS='.' read -r -a a <<<"$1"
+  IFS='.' read -r -a b <<<"$2"
   for i in 0 1 2; do
     local ai=${a[$i]:-0} bi=${b[$i]:-0}
-    if (( ai > bi )); then return 0; fi
-    if (( ai < bi )); then return 1; fi
+    if ((ai > bi)); then return 0; fi
+    if ((ai < bi)); then return 1; fi
   done
   return 0
 }
@@ -265,7 +271,7 @@ ensure_supported_runtime() {
   [[ "$node_major" =~ ^[0-9]+$ ]] || error "Could not determine Node.js version from '${node_version}'. ${RUNTIME_REQUIREMENT_MSG}"
   [[ "$npm_major" =~ ^[0-9]+$ ]] || error "Could not determine npm version from '${npm_version}'. ${RUNTIME_REQUIREMENT_MSG}"
 
-  if (( node_major < MIN_NODE_MAJOR || npm_major < MIN_NPM_MAJOR )); then
+  if ((node_major < MIN_NODE_MAJOR || npm_major < MIN_NPM_MAJOR)); then
     error "Unsupported runtime detected: Node.js ${node_version:-unknown}, npm ${npm_version:-unknown}. ${RUNTIME_REQUIREMENT_MSG} Upgrade Node.js and rerun the installer."
   fi
 
@@ -288,7 +294,10 @@ install_nodejs() {
   local nvm_tmp
   nvm_tmp="$(mktemp)"
   curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" -o "$nvm_tmp" \
-    || { rm -f "$nvm_tmp"; error "Failed to download nvm installer"; }
+    || {
+      rm -f "$nvm_tmp"
+      error "Failed to download nvm installer"
+    }
   local actual_hash
   if command_exists sha256sum; then
     actual_hash="$(sha256sum "$nvm_tmp" | awk '{print $1}')"
@@ -296,7 +305,7 @@ install_nodejs() {
     actual_hash="$(shasum -a 256 "$nvm_tmp" | awk '{print $1}')"
   else
     warn "No SHA-256 tool found — skipping nvm integrity check"
-    actual_hash="$NVM_SHA256"  # allow execution
+    actual_hash="$NVM_SHA256" # allow execution
   fi
   if [[ "$actual_hash" != "$NVM_SHA256" ]]; then
     rm -f "$nvm_tmp"
@@ -323,27 +332,69 @@ get_ollama_version() {
 }
 
 detect_gpu() {
-  # Returns 0 if a GPU is detected
+  # Returns 0 if a GPU is detected.
+
+  # 1) Standard NVIDIA path
   if command_exists nvidia-smi; then
-    nvidia-smi &>/dev/null && return 0
+    if nvidia-smi -L >/dev/stdout; then
+      return 0
+    fi
   fi
+
+  # 2) Jetson / Thor fallback: NVIDIA L4T marker
+  if [[ -f /etc/nv_tegra_release ]]; then
+    return 0
+  fi
+
+  # 3) Jetson / Thor fallback: device-tree compatible/model
+  if [[ -r /proc/device-tree/compatible ]]; then
+    if tr '\0' '\n' </proc/device-tree/compatible | grep -qiE 'nvidia,tegra|nvidia,thor'; then
+      return 0
+    fi
+  fi
+
+  if [[ -r /proc/device-tree/model ]]; then
+    if tr '\0' '\n' </proc/device-tree/model | grep -qiE 'jetson|thor|nvidia'; then
+      return 0
+    fi
+  fi
+
   return 1
 }
 
 get_vram_mb() {
-  # Returns total VRAM in MiB (NVIDIA only). Falls back to 0.
+  # Returns total VRAM in MiB.
+  # On discrete NVIDIA GPUs, query nvidia-smi.
+  # On Jetson/Thor, approximate with system RAM as GPU memory is shared/unified.
+
+  # 1) Standard discrete-GPU path
   if command_exists nvidia-smi; then
-    nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null \
-      | awk '{s += $1} END {print s+0}'
-    return
+    local smi_mem
+    smi_mem="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | awk '{s += $1} END {print s+0}')"
+    if [[ -n "${smi_mem:-}" && "$smi_mem" -gt 0 ]]; then
+      echo "$smi_mem"
+      return
+    fi
   fi
-  # macOS — report unified memory as VRAM
+
+  # 2) Jetson / Thor fallback: use total system RAM as shared GPU memory budget proxy
+  if [[ -f /etc/nv_tegra_release ]] || [[ -r /proc/device-tree/model ]]; then
+    local mem_kb
+    mem_kb="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
+    if [[ -n "${mem_kb:-}" && "$mem_kb" -gt 0 ]]; then
+      echo $((mem_kb / 1024))
+      return
+    fi
+  fi
+
+  # 3) macOS unified memory fallback
   if [[ "$(uname -s)" == "Darwin" ]] && command_exists sysctl; then
     local bytes
-    bytes=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
-    echo $(( bytes / 1024 / 1024 ))
+    bytes="$(sysctl -n hw.memsize)"
+    echo $((bytes / 1024 / 1024))
     return
   fi
+
   echo 0
 }
 
@@ -373,10 +424,10 @@ install_or_upgrade_ollama() {
   # Pull the appropriate model based on VRAM
   local vram_mb
   vram_mb=$(get_vram_mb)
-  local vram_gb=$(( vram_mb / 1024 ))
+  local vram_gb=$((vram_mb / 1024))
   info "Detected ${vram_gb} GB VRAM"
 
-  if (( vram_gb >= 120 )); then
+  if ((vram_gb >= 120)); then
     info "Pulling nemotron-3-super:120b…"
     ollama pull nemotron-3-super:120b
   else
@@ -406,13 +457,12 @@ pre_extract_openclaw() {
   info "Pre-extracting openclaw@${openclaw_version} with system tar (GH-503 workaround)…"
   local tmpdir
   tmpdir="$(mktemp -d)"
-  if npm pack "openclaw@${openclaw_version}" --pack-destination "$tmpdir" > /dev/null 2>&1; then
+  if npm pack "openclaw@${openclaw_version}" --pack-destination "$tmpdir" >/dev/null 2>&1; then
     local tgz
     tgz="$(find "$tmpdir" -maxdepth 1 -name 'openclaw-*.tgz' -print -quit)"
     if [[ -n "$tgz" && -f "$tgz" ]]; then
       if mkdir -p "${install_dir}/node_modules/openclaw" \
-        && tar xzf "$tgz" -C "${install_dir}/node_modules/openclaw" --strip-components=1
-      then
+        && tar xzf "$tgz" -C "${install_dir}/node_modules/openclaw" --strip-components=1; then
         info "openclaw pre-extracted successfully"
       else
         warn "Failed to extract openclaw tarball"
@@ -435,8 +485,8 @@ pre_extract_openclaw() {
 install_nemoclaw() {
   if [[ -f "./package.json" ]] && grep -q '"name": "nemoclaw"' ./package.json 2>/dev/null; then
     info "NemoClaw package.json found in current directory — installing from source…"
-    spin "Preparing OpenClaw package" bash -lc "$(declare -f pre_extract_openclaw); pre_extract_openclaw \"\$1\"" _ "$(pwd)" || \
-      warn "Pre-extraction failed — npm install may fail if openclaw tarball is broken"
+    spin "Preparing OpenClaw package" bash -lc "$(declare -f pre_extract_openclaw); pre_extract_openclaw \"\$1\"" _ "$(pwd)" \
+      || warn "Pre-extraction failed — npm install may fail if openclaw tarball is broken"
     spin "Installing NemoClaw dependencies" npm install --ignore-scripts
     spin "Building NemoClaw plugin" bash -lc 'cd nemoclaw && npm install --ignore-scripts && npm run build'
     spin "Linking NemoClaw CLI" npm link
@@ -449,8 +499,8 @@ install_nemoclaw() {
     rm -rf "$nemoclaw_src"
     mkdir -p "$(dirname "$nemoclaw_src")"
     spin "Cloning NemoClaw source" git clone --depth 1 https://github.com/NVIDIA/NemoClaw.git "$nemoclaw_src"
-    spin "Preparing OpenClaw package" bash -lc "$(declare -f pre_extract_openclaw); pre_extract_openclaw \"\$1\"" _ "$nemoclaw_src" || \
-      warn "Pre-extraction failed — npm install may fail if openclaw tarball is broken"
+    spin "Preparing OpenClaw package" bash -lc "$(declare -f pre_extract_openclaw); pre_extract_openclaw \"\$1\"" _ "$nemoclaw_src" \
+      || warn "Pre-extraction failed — npm install may fail if openclaw tarball is broken"
     spin "Installing NemoClaw dependencies" bash -lc "cd \"$nemoclaw_src\" && npm install --ignore-scripts"
     spin "Building NemoClaw plugin" bash -lc "cd \"$nemoclaw_src\"/nemoclaw && npm install --ignore-scripts && npm run build"
     spin "Linking NemoClaw CLI" bash -lc "cd \"$nemoclaw_src\" && npm link"
@@ -558,9 +608,18 @@ main() {
   for arg in "$@"; do
     case "$arg" in
       --non-interactive) NON_INTERACTIVE=1 ;;
-      --version|-v) printf "nemoclaw-installer v%s\n" "$NEMOCLAW_VERSION"; exit 0 ;;
-      --help|-h) usage; exit 0 ;;
-      *) usage; error "Unknown option: $arg" ;;
+      --version | -v)
+        printf "nemoclaw-installer v%s\n" "$NEMOCLAW_VERSION"
+        exit 0
+        ;;
+      --help | -h)
+        usage
+        exit 0
+        ;;
+      *)
+        usage
+        error "Unknown option: $arg"
+        ;;
     esac
   done
   # Also honor env var
