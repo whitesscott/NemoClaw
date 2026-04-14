@@ -136,6 +136,62 @@ describe("nim", () => {
           nimCapable: true,
           unifiedMemory: true,
           spark: false,
+          jetson: true,
+          jetsonClass: "orin-32",
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("detects Orin 64GB unified-memory GPUs distinctly", () => {
+      const runCapture = vi.fn((cmd: string) => {
+        if (cmd.includes("memory.total")) return "";
+        if (cmd.includes("query-gpu=name")) return "NVIDIA Jetson AGX Orin";
+        if (cmd.includes("free -m")) return "65536";
+        return "";
+      });
+      const { nimModule, restore } = loadNimWithMockedRunner(runCapture);
+
+      try {
+        expect(nimModule.detectGpu()).toMatchObject({
+          type: "nvidia",
+          name: "NVIDIA Jetson AGX Orin",
+          count: 1,
+          totalMemoryMB: 65536,
+          perGpuMB: 65536,
+          nimCapable: true,
+          unifiedMemory: true,
+          spark: false,
+          jetson: true,
+          jetsonClass: "orin-64",
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("detects Thor 128GB unified-memory GPUs distinctly", () => {
+      const runCapture = vi.fn((cmd: string) => {
+        if (cmd.includes("memory.total")) return "";
+        if (cmd.includes("query-gpu=name")) return "NVIDIA Thor";
+        if (cmd.includes("free -m")) return "131072";
+        return "";
+      });
+      const { nimModule, restore } = loadNimWithMockedRunner(runCapture);
+
+      try {
+        expect(nimModule.detectGpu()).toMatchObject({
+          type: "nvidia",
+          name: "NVIDIA Thor",
+          count: 1,
+          totalMemoryMB: 131072,
+          perGpuMB: 131072,
+          nimCapable: true,
+          unifiedMemory: true,
+          spark: false,
+          jetson: true,
+          jetsonClass: "thor-128",
         });
       } finally {
         restore();
@@ -159,6 +215,8 @@ describe("nim", () => {
           nimCapable: false,
           unifiedMemory: true,
           spark: false,
+          jetson: true,
+          jetsonClass: "xavier",
         });
       } finally {
         restore();

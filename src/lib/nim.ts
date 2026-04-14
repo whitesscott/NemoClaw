@@ -28,6 +28,8 @@ export interface GpuDetection {
   nimCapable: boolean;
   unifiedMemory?: boolean;
   spark?: boolean;
+  jetson?: boolean;
+  jetsonClass?: "xavier" | "orin" | "orin-32" | "orin-64" | "thor" | "thor-128";
 }
 
 export interface NimStatus {
@@ -35,6 +37,29 @@ export interface NimStatus {
   healthy?: boolean;
   container: string;
   state?: string;
+}
+
+function classifyJetsonDevice(
+  name: string | undefined,
+  totalMemoryMB: number,
+): GpuDetection["jetsonClass"] | undefined {
+  if (!name) return undefined;
+
+  if (/thor/i.test(name)) {
+    return totalMemoryMB >= 120 * 1024 ? "thor-128" : "thor";
+  }
+
+  if (/orin/i.test(name)) {
+    if (totalMemoryMB >= 60 * 1024) return "orin-64";
+    if (totalMemoryMB >= 28 * 1024) return "orin-32";
+    return "orin";
+  }
+
+  if (/xavier/i.test(name)) {
+    return "xavier";
+  }
+
+  return undefined;
 }
 
 export function containerName(sandboxName: string): string {
@@ -107,17 +132,21 @@ export function detectGpu(): GpuDetection | null {
         /* ignored */
       }
       const count = unifiedGpuNames.length;
+      const primaryName = unifiedGpuNames[0];
+      const jetsonClass = classifyJetsonDevice(primaryName, totalMemoryMB);
       const perGpuMB = count > 0 ? Math.floor(totalMemoryMB / count) : totalMemoryMB;
       const isSpark = unifiedGpuNames.some((name: string) => /GB10/i.test(name));
       return {
         type: "nvidia",
-        name: unifiedGpuNames[0],
+        name: primaryName,
         count,
         totalMemoryMB,
         perGpuMB: perGpuMB || totalMemoryMB,
         nimCapable: canRunNimWithMemory(totalMemoryMB),
         unifiedMemory: true,
         spark: isSpark,
+        jetson: !!jetsonClass,
+        jetsonClass,
       };
     }
   } catch {
