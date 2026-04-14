@@ -118,6 +118,8 @@ Guild responses remain mention-gated by default unless you opt into all-message 
 
 Before creating the gateway, the wizard runs preflight checks.
 It verifies that Docker is reachable, warns on untested runtimes such as Podman, and prints host remediation guidance when prerequisites are missing.
+The preflight also enforces the OpenShell version range declared in the blueprint (`min_openshell_version` and `max_openshell_version`).
+If the installed OpenShell version falls outside this range, onboarding exits with an actionable error and a link to compatible releases.
 
 #### `--from <Dockerfile>`
 

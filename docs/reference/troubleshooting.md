@@ -165,6 +165,20 @@ $ nemoclaw onboard
 Podman is not a tested runtime.
 If onboarding or sandbox lifecycle fails, switch to a tested runtime (Docker Desktop, Colima, or Docker Engine) and rerun onboarding.
 
+### OpenShell version above maximum
+
+Each NemoClaw release validates against a range of tested OpenShell versions.
+If the installed OpenShell version exceeds the configured maximum, `nemoclaw onboard` exits with an error:
+
+```text
+✗ openshell <version> is above the maximum supported by this NemoClaw release.
+  blueprint.yaml max_openshell_version: <max>
+```
+
+Upgrade NemoClaw to a version that supports your OpenShell release, or install a supported OpenShell version from the [OpenShell releases page](https://github.com/NVIDIA/OpenShell/releases).
+
+The `install-openshell.sh` script also enforces this constraint and pins fresh installs to the validated maximum version.
+
 ### Invalid sandbox name
 
 Sandbox names must follow RFC 1123 subdomain rules: lowercase alphanumeric characters and hyphens only, and must start and end with an alphanumeric character.
