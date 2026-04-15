@@ -198,6 +198,66 @@ describe("nim", () => {
       }
     });
 
+
+    it("detects Thor from /proc/device-tree/model when nvidia-smi name query is empty", () => {
+      const runCapture = vi.fn((cmd: string) => {
+        if (cmd.includes("memory.total")) return "";
+        if (cmd.includes("query-gpu=name")) return "";
+        if (cmd.includes("cat /proc/device-tree/model")) return "NVIDIA Thor Developer Kit\u0000";
+        if (cmd.includes("cat /etc/nv_tegra_release")) return "";
+        if (cmd.includes("free -m")) return "131072";
+        return "";
+      });
+      const { nimModule, restore } = loadNimWithMockedRunner(runCapture);
+
+      try {
+        expect(nimModule.detectGpu()).toMatchObject({
+          type: "nvidia",
+          name: "NVIDIA Thor Developer Kit",
+          count: 1,
+          totalMemoryMB: 131072,
+          perGpuMB: 131072,
+          nimCapable: true,
+          unifiedMemory: true,
+          spark: false,
+          jetson: true,
+          jetsonClass: "thor-128",
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("detects Orin from /etc/nv_tegra_release when other name probes are empty", () => {
+      const runCapture = vi.fn((cmd: string) => {
+        if (cmd.includes("memory.total")) return "";
+        if (cmd.includes("query-gpu=name")) return "";
+        if (cmd.includes("cat /proc/device-tree/model")) return "";
+        if (cmd.includes("cat /etc/nv_tegra_release")) {
+          return "# R36 (release), REVISION: 4.0, GCID: 12345678, BOARD: t186ref, EABI: aarch64, DATE: ... Jetson AGX Orin";
+        }
+        if (cmd.includes("free -m")) return "65536";
+        return "";
+      });
+      const { nimModule, restore } = loadNimWithMockedRunner(runCapture);
+
+      try {
+        expect(nimModule.detectGpu()).toMatchObject({
+          type: "nvidia",
+          count: 1,
+          totalMemoryMB: 65536,
+          perGpuMB: 65536,
+          nimCapable: true,
+          unifiedMemory: true,
+          spark: false,
+          jetson: true,
+          jetsonClass: "orin-64",
+        });
+      } finally {
+        restore();
+      }
+    });
+
     it("marks low-memory unified-memory NVIDIA devices as not NIM-capable", () => {
       const runCapture = vi.fn((cmd: string) => {
         if (cmd.includes("memory.total")) return "";

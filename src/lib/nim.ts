@@ -39,6 +39,44 @@ export interface NimStatus {
   state?: string;
 }
 
+function getUnifiedMemoryGpuNames(): string[] {
+  const names: string[] = [];
+
+  try {
+    const nameOutput = runCapture(
+      "nvidia-smi --query-gpu=name --format=csv,noheader,nounits",
+      { ignoreError: true },
+    );
+
+    for (const line of (nameOutput || "").split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed) names.push(trimmed);
+    }
+  } catch {
+    /* ignored */
+  }
+
+  if (names.length === 0) {
+    try {
+      const deviceTreeModel = runCapture("cat /proc/device-tree/model", { ignoreError: true });
+      const cleaned = (deviceTreeModel || "").replace(/\0/g, "").trim();
+      if (cleaned) names.push(cleaned);
+    } catch {
+      /* ignored */
+    }
+
+    try {
+      const tegraRelease = runCapture("cat /etc/nv_tegra_release", { ignoreError: true });
+      const cleaned = (tegraRelease || "").trim();
+      if (cleaned) names.push(cleaned);
+    } catch {
+      /* ignored */
+    }
+  }
+
+  return names;
+}
+
 function classifyJetsonDevice(
   name: string | undefined,
   totalMemoryMB: number,
@@ -112,14 +150,7 @@ export function detectGpu(): GpuDetection | null {
 
   // Fallback: unified-memory NVIDIA devices
   try {
-    const nameOutput = runCapture(
-      "nvidia-smi --query-gpu=name --format=csv,noheader,nounits",
-      { ignoreError: true },
-    );
-    const gpuNames = nameOutput
-      .split("\n")
-      .map((line: string) => line.trim())
-      .filter(Boolean);
+    const gpuNames = getUnifiedMemoryGpuNames();
     const unifiedGpuNames = gpuNames.filter((name: string) =>
       UNIFIED_MEMORY_GPU_TAGS.some((tag) => new RegExp(tag, "i").test(name)),
     );
