@@ -67,6 +67,7 @@ const {
   planHostRemediation,
 } = require("./preflight");
 const agentOnboard = require("./agent-onboard");
+const agentDefs = require("./agent-defs");
 
 const gatewayState = require("./gateway-state");
 const validation = require("./validation");
@@ -2824,10 +2825,12 @@ async function createSandbox(
   ensureDashboardForward(sandboxName, chatUiUrl);
 
   // Register only after confirmed ready — prevents phantom entries
+  const effectiveAgent = agent || agentDefs.loadAgent("openclaw");
   registry.registerSandbox({
     name: sandboxName,
     gpuEnabled: !!gpu,
     agent: agent ? agent.name : null,
+    agentVersion: fromDockerfile ? null : (effectiveAgent.expectedVersion || null),
     dangerouslySkipPermissions: dangerouslySkipPermissions || undefined,
   });
 
@@ -5275,6 +5278,10 @@ async function onboard(opts = {}) {
         agent,
         dangerouslySkipPermissions,
       );
+      // Persist model and provider after the sandbox entry exists in the registry.
+      // updateSandbox() silently no-ops when the entry is missing, so this must
+      // run after createSandbox() / registerSandbox() — not before. Fixes #1881.
+      registry.updateSandbox(sandboxName, { model, provider });
       onboardSession.markStepComplete("sandbox", { sandboxName, provider, model, nimContainer });
     }
 
